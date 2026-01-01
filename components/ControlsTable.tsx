@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { SecurityControl } from '../types';
-import { Download, FileText, CheckCircle2, ThumbsUp, ThumbsDown, Send, Layers, Database } from 'lucide-react';
+import { SecurityControl, GitHubConfig } from '../types';
+import { Download, FileText, CheckCircle2, ThumbsUp, ThumbsDown, Send, Layers, Database, Github, ExternalLink } from 'lucide-react';
+import { GitHubModal } from './GitHubModal';
+import { pushToGitHub } from '../services/githubService';
 
 interface ControlsTableProps {
   data: SecurityControl[];
@@ -11,6 +13,11 @@ export const ControlsTable: React.FC<ControlsTableProps> = ({ data, serviceName 
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  
+  // GitHub State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
+  const [prUrl, setPrUrl] = useState<string | null>(null);
 
   // Separate data into planes
   const { controlPlane, dataPlane } = useMemo(() => {
@@ -21,7 +28,7 @@ export const ControlsTable: React.FC<ControlsTableProps> = ({ data, serviceName 
   }, [data]);
 
   const downloadCSV = () => {
-    const headers = ['Control ID', 'Control Name', 'Control Description', 'Plane', 'Mapping to CIS & NIST'];
+    const headers = ['Control ID', 'Control Name', 'Control Description', 'Plane', 'Mapping'];
     
     // Helper to format rows
     const formatRow = (item: SecurityControl) => [
@@ -46,6 +53,20 @@ export const ControlsTable: React.FC<ControlsTableProps> = ({ data, serviceName 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleGitHubPush = async (config: GitHubConfig) => {
+    setIsPushing(true);
+    try {
+      const url = await pushToGitHub(config, serviceName, data);
+      setPrUrl(url);
+      setIsModalOpen(false);
+    } catch (error) {
+      alert("Failed to push to GitHub. Check your token and permissions.");
+      console.error(error);
+    } finally {
+      setIsPushing(false);
+    }
   };
 
   const handleSubmitFeedback = () => {
@@ -83,7 +104,7 @@ export const ControlsTable: React.FC<ControlsTableProps> = ({ data, serviceName 
             <td className="p-4 align-top">
               <div className="flex flex-wrap gap-2">
                  {control.mapping.split(/[,;]/).map((tag, i) => (
-                   <span key={i} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                   <span key={i} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
                      {tag.trim()}
                    </span>
                  ))}
@@ -97,6 +118,14 @@ export const ControlsTable: React.FC<ControlsTableProps> = ({ data, serviceName 
 
   return (
     <div className="w-full max-w-7xl mx-auto animate-fade-in-up mt-8">
+      
+      <GitHubModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onSubmit={handleGitHubPush}
+        isPushing={isPushing}
+      />
+
       <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-6 gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -105,14 +134,46 @@ export const ControlsTable: React.FC<ControlsTableProps> = ({ data, serviceName 
           </h2>
           <p className="text-slate-500 mt-1">Generated {data.length} controls mapped to CIS & NIST.</p>
         </div>
-        <button
-          onClick={downloadCSV}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-all shadow-sm"
-        >
-          <Download className="w-4 h-4" />
-          Export CSV
-        </button>
+        
+        <div className="flex gap-2">
+           <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-900 rounded-lg text-white hover:bg-slate-800 transition-all shadow-sm"
+          >
+            <Github className="w-4 h-4" />
+            Push to GitHub
+          </button>
+          <button
+            onClick={downloadCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-all shadow-sm"
+          >
+            <Download className="w-4 h-4" />
+            CSV
+          </button>
+        </div>
       </div>
+
+      {prUrl && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between animate-fade-in">
+           <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-full">
+                <Github className="w-5 h-5 text-green-700" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-green-800">Pull Request Created!</h4>
+                <p className="text-sm text-green-600">The security controls have been pushed to a new branch.</p>
+              </div>
+           </div>
+           <a 
+            href={prUrl} 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+           >
+             View PR <ExternalLink className="w-3 h-3" />
+           </a>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden flex flex-col max-h-[600px]">
         <div className="overflow-x-auto overflow-y-auto custom-scrollbar">
@@ -122,7 +183,7 @@ export const ControlsTable: React.FC<ControlsTableProps> = ({ data, serviceName 
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 bg-slate-50">Control ID</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-48 bg-slate-50">Control Name</th>
                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Control Description</th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-64 bg-slate-50">Mapping (CIS & NIST)</th>
+                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-64 bg-slate-50">Mapping</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
