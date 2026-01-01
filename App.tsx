@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { InputSection } from './components/InputSection';
 import { ControlsTable } from './components/ControlsTable';
 import { generateSecurityControls } from './services/geminiService';
-import { SecurityControl, AppState } from './types';
+import { getContext } from './services/storageService';
+import { SecurityControl, AppState, PRContext, PRStatus } from './types';
 import { Loader2, AlertTriangle } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -10,12 +11,43 @@ const App: React.FC = () => {
   const [controls, setControls] = useState<SecurityControl[]>([]);
   const [serviceName, setServiceName] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  
+  // Context for PR integration
+  const [prContext, setPrContext] = useState<PRContext | null>(null);
+  
+  // Session Token to avoid repeated logins
+  const [sessionToken, setSessionToken] = useState<string>('');
 
   const handleGenerate = async (inputService: string) => {
     setAppState(AppState.LOADING);
     setServiceName(inputService);
     setErrorMessage('');
+    setPrContext(null);
     
+    // 1. Check local storage for existing context
+    const existing = getContext(inputService);
+    
+    if (existing && existing.controls.length > 0) {
+      console.log("Found existing context:", existing);
+      
+      if (existing.status === PRStatus.MERGED) {
+         // If merged, we trust this data implicitly
+         setControls(existing.controls);
+         setPrContext(existing);
+         setAppState(AppState.SUCCESS);
+         return;
+      }
+      
+      // If OPEN, we still load it, but the UI will show the "Sync" option
+      if (existing.status === PRStatus.OPEN) {
+          setControls(existing.controls);
+          setPrContext(existing);
+          setAppState(AppState.SUCCESS);
+          return;
+      }
+    }
+
+    // 2. If no context or CLOSED without context reset, generate fresh
     try {
       const data = await generateSecurityControls(inputService);
       setControls(data);
@@ -25,6 +57,11 @@ const App: React.FC = () => {
       setErrorMessage("Failed to generate security controls. Please ensure the API Key is valid and try again.");
       setAppState(AppState.ERROR);
     }
+  };
+
+  const handleContextUpdate = (newContext: PRContext) => {
+    setPrContext(newContext);
+    setControls(newContext.controls);
   };
 
   return (
@@ -62,7 +99,14 @@ const App: React.FC = () => {
         )}
 
         {appState === AppState.SUCCESS && (
-          <ControlsTable data={controls} serviceName={serviceName} />
+          <ControlsTable 
+            data={controls} 
+            serviceName={serviceName} 
+            existingContext={prContext}
+            onContextUpdate={handleContextUpdate}
+            sessionToken={sessionToken}
+            setSessionToken={setSessionToken}
+          />
         )}
 
       </main>

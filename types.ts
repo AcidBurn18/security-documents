@@ -16,7 +16,8 @@ export enum AppState {
   IDLE = 'IDLE',
   LOADING = 'LOADING',
   SUCCESS = 'SUCCESS',
-  ERROR = 'ERROR'
+  ERROR = 'ERROR',
+  SYNCING = 'SYNCING'
 }
 
 export interface GitHubConfig {
@@ -25,4 +26,23 @@ export interface GitHubConfig {
   token: string;
   reviewers: string; // Comma separated usernames
   branchBase: string;
+}
+
+export enum PRStatus {
+  OPEN = 'OPEN',
+  MERGED = 'MERGED',
+  CLOSED = 'CLOSED',
+  NONE = 'NONE'
+}
+
+export interface PRContext {
+  serviceName: string;
+  prNumber: number;
+  prUrl: string;
+  branchName: string;
+  repoOwner: string;
+  repoName: string;
+  status: PRStatus;
+  lastUpdated: string;
+  controls: SecurityControl[];
 }
