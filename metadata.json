@@ -1,0 +1,5 @@
+{
+  "name": "CloudGuard Gen",
+  "description": "A specialized tool that generates comprehensive Security Controls documents for Cloud Services (AWS, Azure, GCP), mapping them to CIS and NIST standards using AI.",
+  "requestFramePermissions": []
+}
